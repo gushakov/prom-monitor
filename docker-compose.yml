@@ -1,0 +1,121 @@
+version: "3.7"
+
+volumes:
+  prometheus: {}
+  grafana: {}
+
+configs:
+  prom_config:
+    file: ./prometheus/prometheus.yml
+  grafana_datasource_config:
+    file: ./grafana/datasources/prometheus.yml
+  grafana_dashboards_config:
+    file: ./grafana/dashboards.yml
+  grafana_swarm_dashboard_config:
+    file: ./grafana/dashboards/swarm-stack-monitoring.json
+  grafana_home_views_dashboard_config:
+    file: ./grafana/dashboards/home-views.json
+
+services: 
+  cadvisor:
+    image: google/cadvisor:latest
+    ports:
+    - "8022:8080"
+    volumes:
+    - /:/rootfs:ro
+    - /var/run:/var/run:rw
+    - /sys:/sys:ro
+    - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - prom
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: none
+
+  promswarmconnect:
+    image: fn61/promswarmconnect:20190418_0906_e8c58cac
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DOCKER_URL=unix:///var/run/docker.sock
+      - NETWORK_NAME=prom_prom
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+    networks:
+      - prom
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: none
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    networks:
+      - prom
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    volumes:
+      - prometheus:/prometheus
+    configs:
+      - source: prom_config
+        target: /etc/prometheus/prometheus.yml
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: none
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    networks:
+      - prom
+    volumes:
+      - grafana:/var/lib/grafana
+    configs:
+      - source: grafana_datasource_config
+        target: /etc/grafana/provisioning/datasources/prometheus.yml
+      - source: grafana_dashboards_config
+        target: /etc/grafana/provisioning/dashboards/dashboards.yml
+      - source: grafana_swarm_dashboard_config
+        target: /etc/grafana/dashboards/swarm-stack-monitoring.json
+      - source: grafana_home_views_dashboard_config
+        target: /etc/grafana/dashboards/home-views.json
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: none
+
+  hellohttp:
+    image: joonas/hellohttp:20181221_1251_9e493220
+    environment: 
+      - METRICS_ENDPOINT=/metrics
+    ports: 
+      - "8012:80"
+    networks:
+      - prom
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: none
+  
+  boot:
+    image: github/prom-monitor-boot:latest
+    environment: 
+      - METRICS_ENDPOINT=:8080/actuator/prometheus
+    ports: 
+      - "8080:8080"
+    networks:
+      - prom
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: none
+
+networks: 
+  prom:
+    driver: overlay
