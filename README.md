@@ -3,7 +3,13 @@ Prom-Monitor
 
 Example setup for monitoring Docker Swarm Spring Boot services (several replicas) with Prometheus.
 
+Idea
+---
 
+The idea to monitor Spring Boot application running as a service in a Docker Swarm stack with Prometheus.
+The service can have several replicas, so we are using [promswarmconnect](https://github.com/function61/promswarmconnect) to have a custom service discovery endpoint for Prometheus.
+
+There is a custom metric defined for the application which is then used in a custom Grafana dashboard.
 
 
 Copyright disclaimer
